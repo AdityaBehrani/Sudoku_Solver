@@ -181,5 +181,5 @@ def __main__():
 
     if len(args) == 1:
         solver.run(args[0].strip())
-    elif len(args) == 0:
+    elif len(args) != 1:
         print("Incorrect arguments format.\n" + "See README for instructions.\n")
