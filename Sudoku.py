@@ -5,16 +5,48 @@ the PuzzleSolver class and hte main funcion will except
 singlular puzzles or a text file with multiple.
 Refer to the README for more information.
 """
+
 import sys
 import time
 
 
 class PuzzleSolver:
     """Class encapsulates all necessary functions to solve a 9x9 sudoku puzzle"""
+
     def __init__(self):
         self.n = 9
         self.length = 3
         self.width = 3
+        self.cell_dependencies = self.create_cell_dependencies()
+
+    def get_affected_cells(self, pos):
+        row = pos // 9
+        col = pos % 9
+        subgrid_row = row // 3
+        subgrid_col = col // 3
+
+        affected_cells = set()
+
+        # Add cells from the same row
+        for i in range(9):
+            affected_cells.add(row * 9 + i)
+
+        # Add cells from the same column
+        for i in range(9):
+            affected_cells.add(i * 9 + col)
+
+        # Add cells from the same 3x3 subgrid
+        for i in range(3):
+            for j in range(3):
+                affected_cells.add((subgrid_row * 3 + i) * 9 + subgrid_col * 3 + j)
+
+        return affected_cells
+
+    def create_cell_dependencies(self):
+        cell_dependencies = {}
+        for pos in range(81):
+            cell_dependencies[pos] = self.get_affected_cells(pos)
+        return cell_dependencies
 
     def create_constraints(self, puzzle: str) -> dict[int, set]:
         """Map possible values for a given cell"""
@@ -100,34 +132,62 @@ class PuzzleSolver:
         idx = -1
 
         for cell in constraints:
-            if most_constrained_length > len(constraints[cell]):
-                most_constrained_length = len(constraints[cell])
+            possible_values = len(constraints[cell])
+            if most_constrained_length > possible_values:
+                most_constrained_length = possible_values
                 idx = cell
 
         return idx
 
-    def choices(self, puzzle: str, constraints: dict[int, set]) -> list[str]:
+    def choices(self, puzzle: str, constraints: dict[int, set]):
         """Creates potential puzzles based on current constraints"""
         output = []
         pos = self.best_choice(constraints)
 
+        if pos == -1:
+            return output
+
         for char in constraints[pos]:
-            output.append(str(puzzle[:pos] + char + puzzle[pos + 1 :]))
+            output.append((str(puzzle[:pos] + char + puzzle[pos + 1 :]), char, pos))
 
         return output
 
-    def solve(self, puzzle: str, constraints: dict[int, set]) -> str:
+    def solve(
+        self, puzzle: str, constraints: dict[int, set], empty_counter: int
+    ) -> str:
         """Main function used to solve puzzles"""
-        if self.is_invalid(constraints):
+        if len(constraints.keys()) < empty_counter:
             return ""
 
-        if self.is_solved(puzzle):
+        if empty_counter == 0:
             return puzzle
 
-        for choice in self.choices(puzzle, constraints):
-            res = self.solve(choice, self.create_constraints(choice))
+        for choice, char, pos in self.choices(puzzle, constraints):
+            altered = set()
+            removed = set()
+            original = constraints[pos]
+            del constraints[pos]
+
+            for dep_pos in self.cell_dependencies[pos]:
+                if dep_pos in constraints and char in constraints[dep_pos]:
+                    constraints[dep_pos].remove(char)
+                    altered.add(dep_pos)
+                    if len(constraints[dep_pos]) == 0:
+                        removed.add(dep_pos)
+                        del constraints[dep_pos]
+
+            res = self.solve(choice, constraints, empty_counter - 1)
+
             if res:
                 return res
+
+            for dep_pos in removed:
+                constraints[dep_pos] = set()
+
+            for dep_pos in altered:
+                constraints[dep_pos].add(char)
+
+            constraints[pos] = original
 
         return ""
 
@@ -142,28 +202,32 @@ class PuzzleSolver:
         for idx, puzzle in enumerate(puzzle_list):
             start = time.time()
             puzzle = puzzle.strip()
-            solution = self.solve(puzzle, self.create_constraints(puzzle))
+            solution = self.solve(
+                puzzle, self.create_constraints(puzzle), puzzle.count(".")
+            )
 
             print(
-                f"{f'Puzzle {idx}':<12}: {puzzle}\n"
+                f"{f'Puzzle {idx + 1}':<12}: {puzzle}\n"
                 + f"{'Solution':<12}: {solution}\n"
-                + f"{'Time':<12}: {str(time.time() - start)} seconds\n"
+                + f"{'Time':<12}: {round((time.time() - start), ndigits=2)} seconds\n"
             )
 
         print(
             f"Total time to solve {len(puzzle_list)} puzzles was \
-            {str(time.time() - tot_start)} seconds"
+            {round(time.time() - tot_start, ndigits=2)} seconds"
         )
 
     def run_single_puzzle(self, puzzle: str) -> None:
         """Runs a single puzzle"""
 
         start = time.time()
-        solution = self.solve(puzzle, self.create_constraints(puzzle))
+        solution = self.solve(
+            puzzle, self.create_constraints(puzzle), puzzle.count(".")
+        )
         print(
-            f"{'Puzzle':<10}: {puzzle}\n"
-            + f"{'Solution':<10}: {solution}\n"
-            + f"{'Time':<10}: {str(time.time() - start)} seconds\n"
+            f"{'Puzzle':<12}: {puzzle}\n"
+            + f"{'Solution':<12}: {solution}\n"
+            + f"{'Time':<12}: {round((time.time() - start), ndigits=2)} seconds\n"
         )
 
     def run(self, arg: str) -> None:
@@ -175,11 +239,11 @@ class PuzzleSolver:
             self.run_single_puzzle(arg)
 
 
-def __main__():
+if __name__ == "__main__":
     args = sys.argv[1:]
     solver = PuzzleSolver()
 
     if len(args) == 1:
         solver.run(args[0].strip())
-    elif len(args) == 0:
+    else:
         print("Incorrect arguments format.\n" + "See README for instructions.\n")
