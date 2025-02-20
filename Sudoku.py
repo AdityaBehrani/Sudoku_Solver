@@ -103,13 +103,6 @@ class PuzzleSolver:
 
         return box_output
 
-    def is_invalid(self, constraints: dict[int, set]) -> bool:
-        """Checks if current placement of numbers is valid"""
-        for cell in constraints:
-            if len(constraints[cell]) == 0:
-                return True
-        return False
-
     def check_sum(self, puzzle: str) -> int:
         """Sums the digits of a puzzle.
 
